@@ -7,14 +7,17 @@
 DOCKER_IMAGE_VERSION=3.1
 DOCKER_IMAGE:=mcr.microsoft.com/dotnet/core/sdk:${DOCKER_IMAGE_VERSION}
 ARCH:=x64
-PROJ_DIR:=$(shell pwd)
 UID=$(shell id -u)
 GID=$(shell id -g)
+
+PROJ_PATH:=$(shell pwd)
+BARO_PATH:=/source/Barotrauma
+BIN_PATH:=${BARO_PATH}/bin
 
 .DEFAULT_GOAL=all
 SHELL:=bash
 MAKEFLAGS:=
-DOCKER_FLAGS:= -it --rm -v ${PROJ_DIR}:/source
+DOCKER_FLAGS:= -it --rm -v ${PROJ_PATH}:/source
 
 SPLIT ?= 0
 CONF:=publish
@@ -32,10 +35,8 @@ ERROR_COLOR = \033[0;31m
 WARN_COLOR  = \033[0;33m
 NO_COLOR    = \033[m
 
-OK_STRING    = "[OK]"
-ERROR_STRING = "[ERROR]"
-WARN_STRING  = "[WARNING]"
 COM_STRING   = "Compiling"
+EXEC_STRING  = "Executing"
 
 #----------------------------------------------------------------------------------------------------------------------
 #
@@ -122,7 +123,7 @@ prebuild:
 	@printf "%b" "\n${OK_COLOR}Barotrauma Container Build System\n"
 	@printf "%b" "${COM_COLOR}Image:${NO_COLOR}${OBJ_COLOR} ${DOCKER_IMAGE}${NO_COLOR}\n"
 	@printf "%b" "${COM_COLOR}Arch:${NO_COLOR}${OBJ_COLOR} ${ARCH}${NO_COLOR}\n"
-	@printf "%b" "${COM_COLOR}ProjectDir:${NO_COLOR}${OBJ_COLOR} ${PROJ_DIR}${NO_COLOR}\n\n"
+	@printf "%b" "${COM_COLOR}ProjectDir:${NO_COLOR}${OBJ_COLOR} ${PROJ_PATH}${NO_COLOR}\n\n"
 
 #----------------------------------------------------------------------------------------------------------------------
 #
@@ -132,14 +133,17 @@ prebuild:
 
 .PHONY: shell
 shell: prebuild
+	@printf "%b" "${COM_COLOR}${EXEC_STRING}:${NO_COLOR}${OBJ_COLOR} Docker Shell${NO_COLOR}\n\n"
 	@docker run ${DOCKER_FLAGS} ${DOCKER_IMAGE} ${SHELL}
 
 .PHONY: purge clean
 purge clean:
-	@rm -rf "${PROJ_DIR}/Barotrauma/bin"
+	@printf "%b" "\n${COM_COLOR}${EXEC_STRING}:${NO_COLOR}${OBJ_COLOR} Clean/Purge${NO_COLOR}\n\n"
+	@rm -rf "${PROJ_PATH}/Barotrauma/bin"
 
 .PHONY: help list targets
 help list targets:
+	@printf "%b" "\n${COM_COLOR}Available Build Targets${NO_COLOR}\n\n"
 	@$(MAKE) -pRrq -f $(lastword $(MAKEFILE_LIST)) : 2>/dev/null | awk -v RS= -F: '/^# File/,/^# Finished Make data base/ {if ($$1 !~ "^[#.]") {print $$1}}' | sort | egrep -v -e '^[^[:alnum:]]' -e '^$@$$'
 
 #----------------------------------------------------------------------------------------------------------------------
@@ -159,30 +163,32 @@ $1-debug: $1-server-debug $1-client-debug
 .PHONY: $1-server $1-server-release
 $1-server $1-server-release: prebuild
 	@printf "%b" "\n${COM_COLOR}${COM_STRING}:${NO_COLOR}${OBJ_COLOR} ${1}-server${NO_COLOR}\n\n"
-	docker run ${DOCKER_FLAGS} ${DOCKER_IMAGE} ${SHELL} -c "cd /source/Barotrauma/BarotraumaServer; dotnet ${CONF_FLAGS} $(shell echo $1 | sed 's/./\U&/')Server.csproj -c Release -clp:\"${BUILD_FLAGS}\" ${EXTRA_FLAGS} -r $2-x64 \/p:Platform=\"${ARCH}\""
-	docker run ${DOCKER_FLAGS} ${DOCKER_IMAGE} ${SHELL} -c "chown -R ${UID}:${GID} /source/Barotrauma/bin"
+	@docker run ${DOCKER_FLAGS} ${DOCKER_IMAGE} ${SHELL} -c "cd ${BARO_PATH}/BarotraumaServer; dotnet ${CONF_FLAGS} $(shell echo $1 | sed 's/./\U&/')Server.csproj -c Release -clp:\"${BUILD_FLAGS}\" ${EXTRA_FLAGS} -r $2-x64 \/p:Platform=\"${ARCH}\""
+	@docker run ${DOCKER_FLAGS} ${DOCKER_IMAGE} ${SHELL} -c "chown -R ${UID}:${GID} ${BIN_PATH}"
 
 .PHONY: $1-server-debug
 $1-server-debug: prebuild
 	@printf "%b" "\n${COM_COLOR}${COM_STRING}:${NO_COLOR}${OBJ_COLOR} ${1}-server-debug${NO_COLOR}\n\n"
-	@docker run ${DOCKER_FLAGS} ${DOCKER_IMAGE} ${SHELL} -c "cd /source/Barotrauma/BarotraumaServer; dotnet ${CONF_FLAGS} $(shell echo $1 | sed 's/./\U&/')Server.csproj -c Debug -clp:\"${BUILD_FLAGS}\" ${EXTRA_FLAGS} -r $2-x64 \/p:Platform=\"${ARCH}\""
-	@docker run ${DOCKER_FLAGS} ${DOCKER_IMAGE} ${SHELL} -c "chown -R ${UID}:${GID} /source/Barotrauma/bin"
+	@docker run ${DOCKER_FLAGS} ${DOCKER_IMAGE} ${SHELL} -c "cd ${BARO_PATH}/BarotraumaServer; dotnet ${CONF_FLAGS} $(shell echo $1 | sed 's/./\U&/')Server.csproj -c Debug -clp:\"${BUILD_FLAGS}\" ${EXTRA_FLAGS} -r $2-x64 \/p:Platform=\"${ARCH}\""
+	@docker run ${DOCKER_FLAGS} ${DOCKER_IMAGE} ${SHELL} -c "chown -R ${UID}:${GID} ${BIN_PATH}"
 
 .PHONY: $1-client
 $1-client: prebuild
 	@printf "%b" "\n${COM_COLOR}${COM_STRING}:${NO_COLOR}${OBJ_COLOR} ${1}-client${NO_COLOR}\n\n"
-	@docker run ${DOCKER_FLAGS} ${DOCKER_IMAGE} ${SHELL} -c "cd /source/Barotrauma/BarotraumaClient; dotnet ${CONF_FLAGS} $(shell echo $1 | sed 's/./\U&/')Client.csproj -c Release -clp:\"${BUILD_FLAGS}\" ${EXTRA_FLAGS} -r $2-x64 \/p:Platform=\"${ARCH}\""
-	@docker run ${DOCKER_FLAGS} ${DOCKER_IMAGE} ${SHELL} -c "chown -R ${UID}:${GID} /source/Barotrauma/bin"
+	@docker run ${DOCKER_FLAGS} ${DOCKER_IMAGE} ${SHELL} -c "cd ${BARO_PATH}/BarotraumaClient; dotnet ${CONF_FLAGS} $(shell echo $1 | sed 's/./\U&/')Client.csproj -c Release -clp:\"${BUILD_FLAGS}\" ${EXTRA_FLAGS} -r $2-x64 \/p:Platform=\"${ARCH}\""
+	@docker run ${DOCKER_FLAGS} ${DOCKER_IMAGE} ${SHELL} -c "chown -R ${UID}:${GID} ${BIN_PATH}"
 
 .PHONY: $1-client-debug
 $1-client-debug: prebuild
 	@printf "%b" "\n${COM_COLOR}${COM_STRING}:${NO_COLOR}${OBJ_COLOR} ${1}-client-debug${NO_COLOR}\n\n"
-	@docker run ${DOCKER_FLAGS} ${DOCKER_IMAGE} ${SHELL} -c "cd /source/Barotrauma/BarotraumaClient; dotnet ${CONF_FLAGS} $(shell echo $1 | sed 's/./\U&/')Client.csproj -c Debug -clp:\"${BUILD_FLAGS}\" ${EXTRA_FLAGS} -r $2-x64 \/p:Platform=\"${ARCH}\""
-	@docker run ${DOCKER_FLAGS} ${DOCKER_IMAGE} ${SHELL} -c "chown -R ${UID}:${GID} /source/Barotrauma/bin"
+	@docker run ${DOCKER_FLAGS} ${DOCKER_IMAGE} ${SHELL} -c "cd ${BARO_PATH}/BarotraumaClient; dotnet ${CONF_FLAGS} $(shell echo $1 | sed 's/./\U&/')Client.csproj -c Debug -clp:\"${BUILD_FLAGS}\" ${EXTRA_FLAGS} -r $2-x64 \/p:Platform=\"${ARCH}\""
+	@docker run ${DOCKER_FLAGS} ${DOCKER_IMAGE} ${SHELL} -c "chown -R ${UID}:${GID} ${BIN_PATH}"
 
 .PHONY: ${1}-clean
 ${1}-clean:
-	@rm -rf "${PROJ_DIR}/Barotrauma/bin/"*$1
+	@printf "%b" "\n${COM_COLOR}${EXEC_STRING}:${NO_COLOR}${OBJ_COLOR} ${1}-clean${NO_COLOR}\n\n"
+	@docker run ${DOCKER_FLAGS} ${DOCKER_IMAGE} ${SHELL} -c "cd ${BARO_PATH}/BarotraumaClient; dotnet clean $(shell echo $1 | sed 's/./\U&/')Client.csproj -c Debug -r $2-x64"
+	@docker run ${DOCKER_FLAGS} ${DOCKER_IMAGE} ${SHELL} -c "cd ${BARO_PATH}/BarotraumaClient; dotnet clean $(shell echo $1 | sed 's/./\U&/')Client.csproj -c Release -r $2-x64"
 endef
 
 #----------------------------------------------------------------------------------------------------------------------
